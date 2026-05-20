@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบคลังข้อสอบกฎหมายศาลยุติธรรม</title>
+
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* บังคับให้ตารางอยู่ในขอบเขตของ Parent */
+        #history-table {
+            width: 100% !important;
+            margin: 0 !important;
+            /* ลบ margin ที่ DataTables ชอบเติมมาเอง */
+        }
+
+        /* จัดการเซลล์ไม่ให้ชิดขอบจอ */
+        #history-table td,
+        #history-table th {
+            padding: 12px 16px !important;
+            white-space: normal !important;
+            /* ยอมให้ขึ้นบรรทัดใหม่ */
+            word-break: break-word;
+            /* ตัดคำถ้าคำยาวเกิน */
+        }
+
+        /* ปรับแต่งความสวยงามของ DataTable Wrapper */
+        .dataTables_wrapper {
+            padding: 0.5rem 0;
+        }
+
+        /* แก้ไขปุ่มขยายในมือถือ (Responsive Control) ไม่ให้เบียดขอบ */
+        table.dataTable.dtr-inline.collapsed>tbody>tr>td.dtr-control {
+            padding-left: 35px !important;
+        }
+
+        /* ล้างสไตล์เดิมเพื่อให้เข้ากับ Tailwind */
+        #history-table_wrapper .dataTables_length,
+        #history-table_wrapper .dataTables_filter {
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Custom Padding ให้ Cell */
+        table.dataTable tbody th,
+        table.dataTable tbody td {
+            padding: 12px 16px !important;
+        }
+
+        /* ปรับแต่ง Responsive Card สำหรับมือถือ */
+        @media screen and (max-width: 640px) {
+            table.dataTable.dtr-inline.collapsed>tbody>tr>td.dtr-control {
+                padding-left: 30px !important;
+            }
+
+            /* ทำให้ DataTable ดูเหมือน Card มากขึ้น */
+            .dtr-details {
+                width: 100%;
+                display: block;
+            }
+
+            .dtr-data {
+                white-space: normal !important;
+                display: block;
+                margin-top: 5px;
+                color: #475569;
+            }
+        }
+
+        /* Badge สวยๆ ในตาราง */
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        /* Badge คะแนนบนปุ่มเลขชุด */
+        .subset-btn {
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .score-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            /* สีแดงสำหรับคนได้น้อย */
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            border: 2px solid white;
+        }
+
+        .score-badge.passed {
+            background: #10b981;
+            /* สีเขียวสำหรับคนผ่าน (5 คะแนนขึ้นไป) */
+        }
+
+        /* ปรับปรุง DataTable ให้รองรับมือถือ */
+        .history-container {
+            width: 100%;
+            overflow-x: auto;
+            /* เลื่อนซ้ายขวาได้ในมือถือ */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Credit Bar Styling */
+        .credit-bar {
+            background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+            color: #f8fafc;
+            padding: 10px 0;
+            border-bottom: 2px solid #3b82f6;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .credit-name {
+            font-family: 'Sarabun', sans-serif;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 800;
+            background: linear-gradient(to right, #60a5fa, #a855f7, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 200% auto;
+            animation: shine 3s linear infinite;
+        }
+
+        @keyframes shine {
+            to {
+                background-position: 200% center;
+            }
+        }
+
+        .motto {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            letter-spacing: 1px;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        .animate-pop {
+            animation: pop 0.3s ease-out;
+        }
+
+        @keyframes pop {
+            0% {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+
+    <div class="credit-bar no-print">
+        <div class="max-w-2xl mx-auto px-4 flex justify-between items-center">
+            <div class="flex flex-col">
+                <span class="credit-name text-sm">ชายกลัวดอกพิกุล</span>
+                <span class="motto">PRECISION & LEGAL EXCELLENCE</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <span class="text-[10px] text-slate-400 font-mono">SYSTEM ACTIVE v3.0</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="app" class="max-w-2xl mx-auto px-4 py-8">
+
+        <div class="text-center mb-8 no-print">
+            <h1 class="text-3xl font-black text-slate-800">ระบบคลังข้อสอบอัยการ</h1>
+            <p class="text-slate-500">เลือกโหมดการทดสอบเพื่อเริ่มต้น</p>
+        </div>
+
+        <div id="menu-ui" class="space-y-6 animate-pop">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold mb-4 text-blue-600">📂 เลือกชุดข้อสอบ</h2>
+                <div id="set-list" class="grid grid-cols-1 gap-3">
+                </div>
+            </div>
+            <br />
+            <br />
+            <br />
+            <div id="history-section" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-800">📜 ประวัติการทำข้อสอบ</h2>
+                    <div class="flex gap-2">
+                        <button onclick="exportToExcel()"
+                            class="text-sm bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg hover:bg-emerald-200 font-bold flex items-center gap-1">
+                            📊 Export Excel
+                        </button>
+                        <button onclick="window.print()"
+                            class="text-sm bg-slate-100 px-3 py-1 rounded-lg hover:bg-slate-200">พิมพ์ PDF</button>
+                    </div>
+                </div>
+                <div id="history-list" class="space-y-2 text-sm"></div>
+            </div>
+        </div>
+
+        <div id="sub-menu-ui" class="hidden animate-pop space-y-4">
+            <button onclick="backToMain()" class="text-slate-400 hover:text-slate-600 flex items-center gap-1 mb-4">
+                ← กลับหน้าหลัก
+            </button>
+            <h2 id="selected-title" class="text-xl font-bold text-slate-800"></h2>
+
+            <div class="grid grid-cols-1 gap-3">
+                <div onclick="startQuiz('random')"
+                    class="p-5 bg-blue-600 text-white rounded-xl cursor-pointer hover:bg-blue-700 transition-all shadow-lg">
+                    <h3 class="font-bold">โหมดสุ่ม 10 ข้อ</h3>
+                    <p class="text-blue-100 text-xs">ระบบจะสุ่มข้อสอบจากทั้งชุดมาให้</p>
+                </div>
+
+                <div class="p-5 bg-white border border-slate-200 rounded-xl">
+                    <h3 class="font-bold text-slate-700 mb-3">ทำตามลำดับ (ชุดละ 10 ข้อ)</h3>
+                    <div id="sub-sets" class="grid grid-cols-4 gap-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="quiz-ui" class="hidden no-print">
+            <div class="flex justify-between items-center mb-4">
+                <span id="q-number" class="text-xs font-bold text-blue-600">ข้อที่ 1/10</span>
+                <button onclick="location.reload()" class="text-xs text-slate-400">ยกเลิก</button>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+                <div class="flex justify-center gap-2 mb-4 no-print">
+                    <button id="btn-double" onclick="useDoubleChance()"
+                        class="text-[10px] bg-amber-100 text-amber-700 px-3 py-1 rounded-full border border-amber-200 hover:bg-amber-200 font-bold transition-all">
+                        ✌️ ตอบได้ 2 ครั้ง
+                    </button>
+                    <button id="btn-cut1" onclick="useCutOption(1)"
+                        class="text-[10px] bg-purple-100 text-purple-700 px-3 py-1 rounded-full border border-purple-200 hover:bg-purple-200 font-bold transition-all">
+                        ✂️ ตัด 1 ตัวเลือก
+                    </button>
+                    <button id="btn-cut2" onclick="useCutOption(2)"
+                        class="text-[10px] bg-rose-100 text-rose-700 px-3 py-1 rounded-full border border-rose-200 hover:bg-rose-200 font-bold transition-all">
+                        🔥 ตัด 2 ตัวเลือก
+                    </button>
+                </div>
+                <p class="text-[10px] text-rose-500 text-center mt-2 font-medium animate-pulse">
+                    * หากใช้ตัวช่วย ข้อนี้จะถือเป็น 0 คะแนนทันที
+                </p>
+                <h2 id="q-text" class="text-xl font-semibold text-slate-800 mb-6"></h2>
+                <div id="options-container" class="space-y-3"></div>
+                <div id="explanation-box"
+                    class="hidden mt-6 p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded text-sm">
+                    <p id="explanation-text" class="text-emerald-700"></p>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button id="next-btn" onclick="handleNext()"
+                    class="hidden bg-slate-800 text-white px-8 py-3 rounded-xl font-bold">ข้อถัดไป</button>
+            </div>
+        </div>
+
+        <div id="result-ui" class="hidden text-center animate-pop">
+            <h2 class="text-3xl font-black text-slate-800 mb-2">จบการทดสอบ!</h2>
+            <div class="text-5xl font-black text-blue-600 mb-8"><span id="final-score">0</span>/10</div>
+            <button onclick="location.reload()"
+                class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold">กลับหน้าหลัก</button>
+        </div>
+    </div>
+
+    <script>
+        let allData = []; // ข้อสอบทั้งหมดในชุดที่เลือก
+        let currentQuizSet = []; // 10 ข้อที่กำลังทำ
+        let currentIndex = 0;
+        let score = 0;
+        let currentInfo = { title: "", file: "", type: "" };
+        let isLifelineUsed = false; // ข้อนี้ใช้ตัวช่วยไปหรือยัง
+        let activeLifelines = { doubleChance: false }; // สถานะเฉพาะของแต่ละข้อ
+
+        // สถานะการใช้ตัวช่วย (Reset เฉพาะตอนเริ่มโหมดใหม่ 10 ข้อ)
+        let sessionLifelines = {
+            double: false,
+            cut1: false,
+            cut2: false
+        };
+        let isDoubleChanceActive = false; // สถานะเฉพาะข้อที่กำลังทำ
+
+        // โหลดรายการจาก sets.json
+        async function initMenu() {
+            try {
+                const res = await fetch('sets.json');
+                const sets = await res.json();
+                const list = document.getElementById('set-list');
+                sets.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = "p-4 border border-slate-100 rounded-xl hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-all";
+                    div.onclick = () => showSubMenu(s);
+                    div.innerHTML = `<div><div class="font-bold text-slate-700">${s.title}</div><div class="text-xs text-slate-400">${s.file}</div></div> <span>→</span>`;
+                    list.appendChild(div);
+                });
+                loadHistory();
+            } catch (e) { console.error(e); }
+        }
+
+        // แสดงโหมดย่อย (สุ่ม / เลือกชุด)
+        async function showSubMenu(set) {
+            currentInfo.title = set.title;
+            currentInfo.file = set.file;
+            document.getElementById('menu-ui').classList.add('hidden');
+            document.getElementById('sub-menu-ui').classList.remove('hidden');
+            document.getElementById('selected-title').innerText = set.title;
+
+            const res = await fetch(set.file);
+            allData = await res.json();
+
+            // ดึงคะแนนสะสมจาก LocalStorage
+            const savedScores = JSON.parse(localStorage.getItem('quiz_scores') || '{}');
+
+            const subSetsDiv = document.getElementById('sub-sets');
+            subSetsDiv.innerHTML = '';
+            const totalSubSets = Math.ceil(allData.length / 10);
+
+            for (let i = 0; i < totalSubSets; i++) {
+                const btn = document.createElement('button');
+                // สร้าง Unique ID สำหรับชุดนี้ เช่น "ชุดที่ 1-ชุดย่อย 1"
+                const setKey = `${currentInfo.title}-sub-${i + 1}`;
+                const lastScore = savedScores[setKey];
+
+                btn.className = "subset-btn p-3 bg-white border border-slate-200 rounded-xl text-sm hover:border-blue-500 font-bold text-slate-600 shadow-sm";
+                btn.innerHTML = `<span>${i + 1}</span>`;
+
+                // ถ้าเคยทำแล้ว ให้แสดงคะแนน
+                if (lastScore !== undefined) {
+                    const badgeClass = lastScore >= 5 ? 'passed' : '';
+                    btn.innerHTML += `<span class="score-badge ${badgeClass}">${lastScore}/10</span>`;
+                }
+
+                btn.onclick = () => {
+                    currentInfo.activeSetKey = setKey; // เก็บไว้บันทึกคะแนนตอนจบ
+                    startQuiz('serial', i);
+                };
+                subSetsDiv.appendChild(btn);
+            }
+        }
+
+        function startQuiz(type, pageIndex = 0) {
+            currentInfo.type = type === 'random' ? 'สุ่ม' : `ชุดย่อยที่ ${pageIndex + 1}`;
+            if (type === 'random') {
+                currentQuizSet = [...allData].sort(() => 0.5 - Math.random()).slice(0, 10);
+            } else {
+                currentQuizSet = allData.slice(pageIndex * 10, (pageIndex * 10) + 10);
+            }
+
+            // Reset โควตาตัวช่วยใหม่ทั้งหมด
+            sessionLifelines = { double: false, cut1: false, cut2: false };
+            isDoubleChanceActive = false;
+
+            // Reset UI ปุ่มตัวช่วยให้กลับมาสดใส
+            const btnIds = ['btn-double', 'btn-cut1', 'btn-cut2'];
+            btnIds.forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('opacity-30', 'cursor-not-allowed');
+                // คืนค่าฟังก์ชัน onclick (ระบุให้ตรงกับของเดิม)
+                if (id === 'btn-double') btn.onclick = useDoubleChance;
+                if (id === 'btn-cut1') btn.onclick = () => useCutOption(1);
+                if (id === 'btn-cut2') btn.onclick = () => useCutOption(2);
+            });
+
+            currentIndex = 0; score = 0;
+            document.getElementById('sub-menu-ui').classList.add('hidden');
+            document.getElementById('quiz-ui').classList.remove('hidden');
+            showQuestion();
+        }
+
+        function showQuestion() {
+            isLifelineUsed = false;
+            activeLifelines.doubleChance = false;
+
+            const q = currentQuizSet[currentIndex];
+            document.getElementById('q-number').innerText = `ข้อที่ ${currentIndex + 1}/10 (${currentInfo.type})`;
+            document.getElementById('q-text').innerText = q.question;
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            ['ก.', 'ข.', 'ค.', 'ง.'].forEach((label, i) => {
+                const btn = document.createElement('button');
+                btn.className = "option-btn w-full text-left p-4 border border-slate-200 rounded-xl hover:bg-slate-50 flex items-start";
+                btn.innerHTML = `<span class="font-bold mr-3">${label}</span><span>${q.options[i]}</span>`;
+                btn.onclick = () => checkAnswer(i, btn);
+                container.appendChild(btn);
+            });
+            document.getElementById('explanation-box').classList.add('hidden');
+            document.getElementById('next-btn').classList.add('hidden');
+        }
+
+        function handleNext() {
+            currentIndex++;
+            if (currentIndex < currentQuizSet.length) showQuestion();
+            else showResult();
+        }
+
+        function showResult() {
+            document.getElementById('quiz-ui').classList.add('hidden');
+            document.getElementById('result-ui').classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+
+            // บันทึกคะแนนลงระบบ Badge (ถ้าไม่ใช่โหมดสุ่ม)
+            if (currentInfo.activeSetKey) {
+                let savedScores = JSON.parse(localStorage.getItem('quiz_scores') || '{}');
+                savedScores[currentInfo.activeSetKey] = score;
+                localStorage.setItem('quiz_scores', JSON.stringify(savedScores));
+            }
+        }
+
+        // ระบบประวัติ
+        function saveHistory(qText, isCorrect) {
+            let history = JSON.parse(localStorage.getItem('quiz_history') || '[]');
+            history.unshift({
+                set: currentInfo.title,
+                sub: currentInfo.type,
+                q: qText,
+                status: isCorrect ? '✅ ถูก' : '❌ ผิด',
+                date: new Date().toLocaleString('th-TH')
+            });
+            localStorage.setItem('quiz_history', JSON.stringify(history.slice(0, 50))); // เก็บ 50 รายการล่าสุด
+        }
+
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('quiz_history') || '[]');
+            if (history.length === 0) return;
+
+            document.getElementById('history-section').classList.remove('hidden');
+            const container = document.getElementById('history-list');
+
+            // สร้างโครง Table เปล่าๆ
+            // เปลี่ยนโครงสร้างตารางใน innerHTML
+            container.innerHTML = `
+                <div class="mt-4 w-full overflow-hidden"> 
+                    <div class="overflow-x-auto"> 
+                        <table id="history-table" class="display responsive wrap w-full text-sm" style="width:100%">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="all">วันที่</th>
+                                    <th class="all">ชุด/โหมด</th>
+                                    <th class="min-tablet">คำถาม</th>
+                                    <th class="all">Ans</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            // เตรียมข้อมูลลงตาราง
+            const tableData = history.map(h => [
+                h.date.split(' ')[0],
+                h.sub,
+                h.q,
+                h.status.includes('ถูก')
+                    ? '<span class="status-badge bg-emerald-100 text-emerald-700">✅</span>'
+                    : '<span class="status-badge bg-red-100 text-red-700">❌</span>'
+            ]);
+
+            // Initial DataTable
+            if ($.fn.DataTable.isDataTable('#history-table')) {
+                $('#history-table').DataTable().destroy();
+            }
+
+            $('#history-table').DataTable({
+                data: tableData,
+                responsive: true,
+                pageLength: 5, // แสดงทีละ 5 แถวจะได้ไม่ยาว
+                lengthMenu: [5, 10, 25, 50],
+                language: {
+                    search: "ค้นหาในประวัติ:",
+                    lengthMenu: "แสดง _MENU_ รายการ",
+                    info: "แสดง _START_ ถึง _END_ จากทั้งหมด _TOTAL_ รายการ",
+                    paginate: {
+                        next: "ถัดไป",
+                        previous: "ก่อนหน้า"
+                    }
+                },
+                autoWidth: false, // บังคับให้ใช้ CSS คุมความกว้างแทน
+                columnDefs: [
+                    { width: '20%', targets: 0 }, // วันที่
+                    { width: '20%', targets: 1 }, // ชุด
+                    { width: '50%', targets: 2, className: 'text-wrap' }, // คำถาม (ให้พื้นที่เยอะและ Wrap)
+                    { width: '10%', targets: 3, className: 'dt-center' }  // ผล
+                ],
+            });
+        }
+
+        function exportToExcel() {
+            const history = JSON.parse(localStorage.getItem('quiz_history') || '[]');
+
+            if (history.length === 0) {
+                alert("ไม่มีข้อมูลประวัติสำหรับส่งออก");
+                return;
+            }
+
+            // จัดรูปแบบข้อมูลใหม่สำหรับ Excel
+            const dataForExcel = history.map((item, index) => ({
+                "ลำดับ": history.length - index,
+                "วันที่-เวลา": item.date,
+                "ชุดข้อสอบ": item.set,
+                "ชุดย่อย/โหมด": item.sub,
+                "คำถาม": item.q,
+                "ผลลัพธ์": item.status.includes('ถูก') ? 'ถูกต้อง' : 'ผิด',
+            }));
+
+            // สร้าง Worksheet
+            const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+
+            // ตั้งค่าความกว้างของคอลัมน์ (ประมาณการ)
+            const wscols = [
+                { wch: 6 },  // ลำดับ
+                { wch: 20 }, // วันที่
+                { wch: 35 }, // ชุดข้อสอบ
+                { wch: 15 }, // ชุดย่อย
+                { wch: 60 }, // คำถาม
+                { wch: 10 }  // ผลลัพธ์
+            ];
+            worksheet['!cols'] = wscols;
+
+            // สร้าง Workbook
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "ประวัติการทำข้อสอบ");
+
+            // สร้างชื่อไฟล์ตามวันที่ปัจจุบัน
+            const fileName = `สรุปคะแนน_ชายกลัวดอกพิกุล_${new Date().getTime()}.xlsx`;
+
+            // ดาวน์โหลดไฟล์
+            XLSX.writeFile(workbook, fileName);
+        }
+
+        // ฟังก์ชันสุ่มตัดตัวเลือกที่ผิด
+        function useCutOption(count) {
+            const lifelineKey = count === 1 ? 'cut1' : 'cut2';
+            const btnId = count === 1 ? 'btn-cut1' : 'btn-cut2';
+
+            if (sessionLifelines[lifelineKey]) return; // ถ้าเคยใช้ในชุดนี้แล้ว ไม่ทำอะไร
+
+            const q = currentQuizSet[currentIndex];
+            const incorrectIndexes = [];
+            q.options.forEach((_, i) => {
+                if (i !== q.answer) incorrectIndexes.push(i);
+            });
+
+            const toCut = incorrectIndexes.sort(() => 0.5 - Math.random()).slice(0, count);
+            const buttons = document.querySelectorAll('.option-btn');
+
+            toCut.forEach(idx => {
+                buttons[idx].style.opacity = "0.3";
+                buttons[idx].style.pointerEvents = "none";
+                buttons[idx].querySelector('span:last-child').style.textDecoration = "line-through";
+            });
+
+            // บันทึกว่าใช้ไปแล้ว
+            sessionLifelines[lifelineKey] = true;
+            q.noScore = true; // ข้อนี้ไม่ได้คะแนน
+            updateLifelineUI(); // อัปเดตหน้าตาปุ่ม
+        }
+
+        // ฟังก์ชันตอบได้ 2 ครั้ง
+        function useDoubleChance() {
+            if (sessionLifelines.double) return;
+
+            activeLifelines.doubleChance = true;
+            isLifelineUsed = true;
+            isDoubleChanceActive = true;
+            sessionLifelines.double = true;
+            currentQuizSet[currentIndex].noScore = true;
+
+            updateLifelineUI();
+        }
+
+        // แก้ไขฟังก์ชัน checkAnswer เดิมเล็กน้อย
+        function checkAnswer(idx, btn) {
+            const q = currentQuizSet[currentIndex];
+            const isCorrect = idx === q.answer;
+
+            if (activeLifelines.doubleChance && !isCorrect) {
+                // ถ้าใช้ "ตอบ 2 ครั้ง" แล้วตอบผิดครั้งแรก
+                btn.classList.add('bg-slate-100', 'opacity-50');
+                btn.disabled = true;
+                btn.onclick = null;
+                activeLifelines.doubleChance = false; // ใช้สิทธิ์ไปแล้ว
+                return; // จบฟังก์ชัน ไม่แสดงเฉลย
+            }
+
+            const buttons = document.querySelectorAll('.option-btn');
+            buttons.forEach(b => b.disabled = true);
+
+            if (isCorrect) {
+                btn.classList.add('bg-emerald-50', 'border-emerald-500', 'text-emerald-700');
+                // บวกคะแนนเฉพาะกรณีที่ไม่ได้ใช้ตัวช่วย
+                if (!q.noScore) score++;
+            } else {
+                btn.classList.add('bg-red-50', 'border-red-500', 'text-red-700');
+                buttons[q.answer].classList.add('bg-emerald-50', 'border-emerald-500');
+            }
+
+            // แสดง Remark ในกล่องคำอธิบาย
+            const expBox = document.getElementById('explanation-box');
+            const expText = document.getElementById('explanation-text');
+
+            let remark = "";
+            if (q.noScore) {
+                remark = `<div class="mb-2 text-rose-600 font-bold border-b border-rose-200 pb-1">
+                    ⚠️ ข้อนี้ไม่ได้คะแนน (เนื่องจากใช้ตัวช่วย)
+                  </div>`;
+            }
+
+            saveHistory(q.question, isCorrect);
+            expText.innerHTML = remark + (q.explanation || "ไม่มีคำอธิบาย");
+            expBox.classList.remove('hidden');
+        }
+
+        // ฟังก์ชันอัปเดตสถานะปุ่ม (ทำให้จางหรือกดไม่ได้เมื่อใช้โควตาหมด)
+        function updateLifelineUI() {
+            if (sessionLifelines.double) {
+                document.getElementById('btn-double').classList.add('opacity-30', 'cursor-not-allowed');
+                document.getElementById('btn-double').onclick = null;
+            }
+            if (sessionLifelines.cut1) {
+                document.getElementById('btn-cut1').classList.add('opacity-30', 'cursor-not-allowed');
+                document.getElementById('btn-cut1').onclick = null;
+            }
+            if (sessionLifelines.cut2) {
+                document.getElementById('btn-cut2').classList.add('opacity-30', 'cursor-not-allowed');
+                document.getElementById('btn-cut2').onclick = null;
+            }
+        }
+
+        function backToMain() { location.reload(); }
+        window.onload = initMenu;
+    </script>
+</body>
+
+</html>
